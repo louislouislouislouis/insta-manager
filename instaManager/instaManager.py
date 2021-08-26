@@ -111,7 +111,7 @@ class InstaManager:
             parsed_json = json.loads(content)
             for section in parsed_json["data"]["recent"]["sections"]:
                 for media in section["layout_content"]["medias"]:
-                    if media["media"]["caption"]["text"]:
+                    if media["media"]["caption"] and media["media"]["caption"]["text"]:
                         hashtags = re.findall("[#]\w+", media["media"]["caption"]["text"])
                     else:
                         hashtags = []

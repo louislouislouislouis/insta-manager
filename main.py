@@ -1,9 +1,20 @@
+import os
+import json
+import sys
 from instaManager.instaManager import InstaManager
 
-# login credentials
-insta_username = 'magnify_music_app'
-insta_password = 'lojR6W25'
 PATH_TO_DRIVER = "./chromedriver"
+CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'credentials.json')
+
+try:
+    f = open(CREDENTIALS_FILENAME)
+    my_cred = json.load(f)
+    insta_password = my_cred["insta_pw"]
+    insta_username = my_cred["insta_login"]
+except Exception as bad_except:
+    print(bad_except)
+    sys.exit()
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     my_insta_manager = InstaManager(PATH_TO_DRIVER, insta_username, insta_password)
