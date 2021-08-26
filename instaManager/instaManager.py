@@ -115,7 +115,6 @@ class InstaManager:
                         hashtags = re.findall("[#]\w+", media["media"]["caption"]["text"])
                     else:
                         hashtags = []
-
                     level = 1
                     for hashtag in hashtags:
                         real_hashtags = hashtag[1:].lower()
