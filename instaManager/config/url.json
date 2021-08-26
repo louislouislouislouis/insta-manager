@@ -1,0 +1,5 @@
+{
+  "connecting_page": "https://www.instagram.com/accounts/login/",
+  "post_by_tag": "https://www.instagram.com/explore/tags/{TAG_VALUE}/?__a=1",
+  "post_by_id": "https://www.instagram.com/p/{ID}"
+}
