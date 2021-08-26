@@ -77,10 +77,13 @@ class InstaManager:
             self.logger.print("Trouble connecting in insta", type="ERROR", color="red", method="CONNECT")
             self.logger.print(bad_except, "ERROR", color="red", method="CONNECT")
 
-    def find_and_comment_post_by_tag(self, tags, percentage_like=0.5, percentage_comment=0.5, sleep_time=20):
+    def find_and_comment_post_by_tag(self, tags, percentage_like=0.5, percentage_comment=0.5, sleep_time=20,
+                                     limits_like=20, limits_comments=20):
+        self.logger.print("Start comment and like by tag session", color="blue", method="FIND AND INTERACT BY TAGS")
         if not self.is_connected:
             raise NotConnectedError.NotConnectedError()
         else:
+            stats = {"comments": 0, "likes": 0}
             # find comments
             try:
                 f = open(COMMENTS_FILENAME)
@@ -128,6 +131,7 @@ class InstaManager:
 
             # interact with posts
             for post_id in post_ids:
+
                 # get into post page
                 url = re.sub("\{.*?\}", post_id["post_id"], self.urls.get("post_by_id"))
                 get(self.driver, url)
@@ -135,7 +139,7 @@ class InstaManager:
                 click(self.driver, self.xpath.get("post_page").get("comment_text_area"))
 
                 # comment conditional
-                if random.random() < percentage_comment * post_id["level"]:
+                if random.random() < percentage_comment * post_id["level"] and stats.get("comments") < limits_comments:
                     if post_id["type"] == 2:
                         # get random video comment
                         comment = comments["default"]["video"][random.randint(0, len(comments["default"]["video"]) - 1)]
@@ -150,16 +154,27 @@ class InstaManager:
                     time.sleep(0.5)
                     # publish comment
                     click(self.driver, self.xpath.get("post_page").get("publish_comment_button"), )
+                    # stats
+                    stats["comments"] += 1
                     self.logger.print("Just comment a level " + str(post_id["level"]) + " post", color="blue",
                                       method="FIND AND INTERACT BY TAGS")
 
                 # like conditional
-                if random.random() < percentage_like * post_id["level"]:
+                if random.random() < percentage_like * post_id["level"] and stats.get("likes") < limits_like:
                     click(self.driver, self.xpath.get("post_page").get("like_button"), )
+                    # stats
+                    stats["likes"] += 1
                     self.logger.print("Just lik a level " + str(post_id["level"]) + " post", color="blue",
                                       method="FIND AND INTERACT BY TAGS")
 
+                if stats["comments"] == limits_comments and stats["likes"] == limits_like:
+                    self.logger.print("Max interaction reached", color="blue", method="FIND AND INTERACT BY TAGS")
+                    break
+
+                self.logger.print(
+                    "Just finish interacting a post of level " + str(post_id["level"]) + " // Stats: " + str(stats),
+                    color="blue", method="FIND AND INTERACT BY TAGS")
                 # sleep before next iteration
-                self.logger.print("Just finish interacting a post of level " + str(post_id["level"]), color="blue",
-                                  method="FIND AND INTERACT BY TAGS")
                 time.sleep(sleep_time)
+            self.logger.print("Finish comment and like by tag session", color="blue",
+                              method="FIND AND INTERACT BY TAGS")
