@@ -25,7 +25,7 @@ HASHTAGS_FILENAME = os.path.join(os.path.dirname(__file__), 'data/hashtags.json'
 
 
 class InstaManager:
-    def __init__(self, username, password, private=True):
+    def __init__(self, path_to_driver, username, password, private=True):
 
         self.username = username
         self.password = password
@@ -53,7 +53,7 @@ class InstaManager:
         if private:
             chrome_options.add_argument("--incognito")
 
-        self.driver = webdriver.Chrome("./chromedriver", options=chrome_options)
+        self.driver = webdriver.Chrome(path_to_driver, options=chrome_options)
         self.logger.print("Class InstaManager initialized", color="blue", method="CONSTRUCTOR")
 
     def connect(self, max_time=6):
