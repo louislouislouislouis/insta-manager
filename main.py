@@ -19,8 +19,10 @@ except Exception as bad_except:
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    my_insta_manager = InstaManager(PATH_TO_DRIVER, insta_username, insta_password)
+    my_insta_manager = InstaManager(PATH_TO_DRIVER, insta_username, insta_password, headless=False)
     my_insta_manager.connect()
-    list1, list2, list3 = my_insta_manager.get_follow_data("louis.lmbrd")
+    print('ee')
+    my_insta_manager.get_friendship_status()
+    # list1, list2, list3 = my_insta_manager.get_follow_data("louis.lmbrd")
 
     # my_insta_manager.find_and_comment_post_by_tag("indiemusic", percentage_like=0.2, percentage_comment=0.2)

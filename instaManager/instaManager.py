@@ -29,12 +29,13 @@ HASHTAGS_FILENAME = os.path.join(os.path.dirname(__file__), 'data/hashtags.json'
 
 
 class InstaManager:
-    def __init__(self, path_to_driver, username, password, private=True):
+    def __init__(self, path_to_driver, username, password, private=True, headless=False):
 
         self.username = username
         self.password = password
         self.is_connected = False
         self.logger = Log("INSTAMANAGER")
+        self.headless = headless
 
         # Json option
         try:
@@ -56,6 +57,12 @@ class InstaManager:
         chrome_options = webdriver.ChromeOptions()
         if private:
             chrome_options.add_argument("--incognito")
+            if self.headless:
+                chrome_options.add_argument("--window-size=1920,1080")
+                chrome_options.add_argument("--headless")
+                chrome_options.add_argument("--disable-gpu")
+                chrome_options.add_argument(
+                    "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36")
 
         self.driver = webdriver.Chrome(path_to_driver, options=chrome_options)
         self.logger.print("Class InstaManager initialized", color="blue", method="CONSTRUCTOR")
@@ -78,6 +85,9 @@ class InstaManager:
             self.is_connected = True
             self.logger.print("Connecting successful...", color="blue", method="CONNECT")
         except TimeoutException as bad_except:
+            elem = self.driver.find_element_by_xpath("//*")
+            source_code = elem.get_attribute("outerHTML")
+            print(source_code)
             self.logger.print("Trouble connecting in insta", type="ERROR", color="red", method="CONNECT")
             self.logger.print(bad_except, "ERROR", color="red", method="CONNECT")
 
@@ -214,8 +224,13 @@ class InstaManager:
                 "{VAR_VAL}", params)
             get(self.driver, url)
             # get data
+            elem = self.driver.find_element_by_xpath("//*")
+            source_code = elem.get_attribute("outerHTML")
+            print(source_code)
             content = self.driver.find_element_by_tag_name('pre').text
             parsed_json = json.loads(content)
+            if parsed_json.get("status") != "ok":
+                raise GraphQLError.GraphQLError(parsed_json)
             has_next = parsed_json.get("data").get("user").get("edge_followed_by").get("page_info").get("has_next_page")
             after = parsed_json.get("data").get("user").get("edge_followed_by").get("page_info").get("end_cursor")
             followers_raw = parsed_json.get("data").get("user").get("edge_followed_by").get("edges")
@@ -243,6 +258,8 @@ class InstaManager:
             # get data
             content = self.driver.find_element_by_tag_name('pre').text
             parsed_json = json.loads(content)
+            if parsed_json.get("status") != "ok":
+                raise GraphQLError.GraphQLError(parsed_json)
             has_next = parsed_json.get("data").get("user").get("edge_follow").get("page_info").get(
                 "has_next_page")
             after = parsed_json.get("data").get("user").get("edge_follow").get("page_info").get(
@@ -270,3 +287,48 @@ class InstaManager:
                 fake_friends_not_following_me[i] = followings[i]
 
         return mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me
+
+    def get_friendship_status(self):
+        try:
+            mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me = self.get_follow_data(
+                self.username)
+        except GraphQLError.GraphQLError as bad_except:
+            print(bad_except)
+            if "limited" in bad_except.json.get("message"):
+                raise bad_except
+
+        result = {}
+
+        print(mutual_friends)
+
+        for friends in mutual_friends:
+            try:
+                mutual_friends_of_friends, not_used1, not_used2 = self.get_follow_data(
+                    mutual_friends.get(friends).get("user_name"))
+            except GraphQLError.GraphQLError as bad_except:
+                if "patienter" in bad_except.json.get("message"):
+                    self.logger.print("Limits of request reached, sleep 60", color="yellow",
+                                      method="GET FRIENDSHIP STATUS")
+                    time.sleep(60)
+                    mutual_friends_of_friends, not_used1, not_used2 = self.get_follow_data(
+                        mutual_friends.get(friends).get("user_name"))
+                elif "limited" in bad_except.json.get("message"):
+                    self.logger.print("Too many request done, sleep 120", color="red", method="GET FRIENDSHIP STATUS")
+                    time.sleep(120)
+                    mutual_friends_of_friends, not_used1, not_used2 = self.get_follow_data(
+                        mutual_friends.get(friends).get("user_name"))
+            mutual_friendship = mutual_friends.keys() & mutual_friends_of_friends.keys()
+            result[mutual_friends.get(friends).get("user_name")] = {
+                "same_real_friends_number": len(mutual_friendship),
+                "percentage_real_friends_common": (len(mutual_friendship) / len(mutual_friends_of_friends)) * 100}
+            print(result)
+
+        sorted_friends_by_percentage = sorted(result.items(), key=lambda x: x[1].get("percentage_real_friends_common"))
+        for i in range(len(sorted_friends_by_percentage)):
+            print(str(i + 1) + ": " + str(sorted_friends_by_percentage[i][0]) + "-->" + str(
+                sorted_friends_by_percentage[i][1]))
+        sorted_friends_by_number = sorted(result.items(), key=lambda x: x[1].get("same_real_friends_number"))
+        for i in range(len(sorted_friends_by_number)):
+            print(str(i + 1) + ": " + str(sorted_friends_by_number[i][0]) + "-->" + str(sorted_friends_by_number[i][1]))
+
+        return result
