@@ -1,5 +1,7 @@
 {
   "connecting_page": "https://www.instagram.com/accounts/login/",
   "post_by_tag": "https://www.instagram.com/explore/tags/{TAG_VALUE}/?__a=1",
-  "post_by_id": "https://www.instagram.com/p/{ID}"
+  "post_by_id": "https://www.instagram.com/p/{ID}",
+  "profile_page": "https://www.instagram.com/{ID}",
+  "graphql_query": "https://www.instagram.com/graphql/query/?query_hash={QUERY_HASH}&variables={VAR_VAL}"
 }

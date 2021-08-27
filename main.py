@@ -5,7 +5,7 @@ from instaManager.instaManager import InstaManager
 
 # const
 PATH_TO_DRIVER = "./chromedriver"
-CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'credentials.json')
+CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'credentials2.json')
 
 # get cred info
 try:
@@ -21,4 +21,6 @@ except Exception as bad_except:
 if __name__ == '__main__':
     my_insta_manager = InstaManager(PATH_TO_DRIVER, insta_username, insta_password)
     my_insta_manager.connect()
-    my_insta_manager.find_and_comment_post_by_tag("indiemusic", percentage_like=0.2, percentage_comment=0.2)
+    list1, list2, list3 = my_insta_manager.get_follow_data("louis.lmbrd")
+
+    # my_insta_manager.find_and_comment_post_by_tag("indiemusic", percentage_like=0.2, percentage_comment=0.2)

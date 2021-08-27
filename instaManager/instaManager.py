@@ -5,10 +5,14 @@ import os
 import re
 import time
 import random
+import urllib
 
 # selenium libraries
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
+
+# numpy
+import numpy as np
 
 # personal import
 from instaManager.exception import *
@@ -178,3 +182,91 @@ class InstaManager:
                 time.sleep(sleep_time)
             self.logger.print("Finish comment and like by tag session", color="blue",
                               method="FIND AND INTERACT BY TAGS")
+            return stats
+
+    def get_follow_data(self, username):
+        # get profile url
+        url = re.sub("\{.*?\}", username, self.urls.get("profile_page"))
+        # json format
+        url += "/?__a=1"
+        # load browser
+        get(self.driver, url)
+        # get good data
+        content = self.driver.find_element_by_tag_name('pre').text
+        parsed_json = json.loads(content)
+        real_user_id = parsed_json.get("graphql").get("user").get("id")
+
+        # loop for followers
+        has_next = True
+        after = None
+        followers = {}
+        followings = {}
+        while has_next:
+            params = {"id": real_user_id,
+                      "include_reel": True,
+                      "fetch_mutual": True,
+                      "first": 50,
+                      "after": after
+                      }
+            params = urllib.parse.quote_plus(json.dumps(params).replace(' ', ""))
+
+            url = self.urls.get("graphql_query").replace("{QUERY_HASH}", "c76146de99bb02f6415203be841dd25a").replace(
+                "{VAR_VAL}", params)
+            get(self.driver, url)
+            # get data
+            content = self.driver.find_element_by_tag_name('pre').text
+            parsed_json = json.loads(content)
+            has_next = parsed_json.get("data").get("user").get("edge_followed_by").get("page_info").get("has_next_page")
+            after = parsed_json.get("data").get("user").get("edge_followed_by").get("page_info").get("end_cursor")
+            followers_raw = parsed_json.get("data").get("user").get("edge_followed_by").get("edges")
+            for follower_raw in followers_raw:
+                user_name = follower_raw.get("node").get("username")
+                full_name = follower_raw.get("node").get("full_name")
+                followers[follower_raw.get("node").get("id")] = {"user_name": user_name, "full_name": full_name}
+
+        # loop for followings
+        has_next = True
+        after = None
+        while has_next:
+            params = {"id": real_user_id,
+                      "include_reel": True,
+                      "fetch_mutual": True,
+                      "first": 50,
+                      "after": after
+                      }
+            params = urllib.parse.quote_plus(json.dumps(params).replace(' ', ""))
+            url = self.urls.get("graphql_query").replace("{QUERY_HASH}",
+                                                         "d04b0a864b4b54837c0d870b0e77e076").replace(
+                "{VAR_VAL}", params)
+
+            get(self.driver, url)
+            # get data
+            content = self.driver.find_element_by_tag_name('pre').text
+            parsed_json = json.loads(content)
+            has_next = parsed_json.get("data").get("user").get("edge_follow").get("page_info").get(
+                "has_next_page")
+            after = parsed_json.get("data").get("user").get("edge_follow").get("page_info").get(
+                "end_cursor")
+            followings_raw = parsed_json.get("data").get("user").get("edge_follow").get("edges")
+            for following_raw in followings_raw:
+                user_name = following_raw.get("node").get("username")
+                full_name = following_raw.get("node").get("full_name")
+                followings[following_raw.get("node").get("id")] = {"user_name": user_name, "full_name": full_name}
+
+        # treat data - common friends
+        mutual_friendship = followings.keys() & followers.keys()
+        mutual_friends = {}
+        for inter in mutual_friendship:
+            mutual_friends[inter] = followers[inter]
+
+        # treat data - fake friends
+        fake_friends_not_follow_by_me = {}
+        fake_friends_not_following_me = {}
+        for i in followers:
+            if i not in mutual_friendship:
+                fake_friends_not_follow_by_me[i] = followers[i]
+        for i in followings:
+            if i not in mutual_friendship:
+                fake_friends_not_following_me[i] = followings[i]
+
+        return mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me
