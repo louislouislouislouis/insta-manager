@@ -3,3 +3,4 @@ chromedriver
 credentials.json
 credentials2.json
 credentials*
+test_*

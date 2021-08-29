@@ -270,7 +270,7 @@ class InstaManager:
             for follower_raw in followers_raw:
                 user_name = follower_raw.get("node").get("username")
                 full_name = follower_raw.get("node").get("full_name")
-                followers_array.append({"insta_id": follower_raw.get("node").get("id"), "user_name": user_name})
+                followers_array.append({"insta_id": follower_raw.get("node").get("id"), "username": user_name})
                 followers[follower_raw.get("node").get("id")] = {"username": user_name, "full_name": full_name}
 
         # loop for followings
@@ -303,15 +303,16 @@ class InstaManager:
             for following_raw in followings_raw:
                 user_name = following_raw.get("node").get("username")
                 full_name = following_raw.get("node").get("full_name")
-                followings_array.append({"insta_id": following_raw.get("node").get("id"), "user_name": user_name})
+                followings_array.append({"insta_id": following_raw.get("node").get("id"), "username": user_name})
                 followings[following_raw.get("node").get("id")] = {"username": user_name, "full_name": full_name}
-
+        # create user
+        new_user = User(username, full_user_name, real_user_id, followers_array, followings_array, user_bio)
         # database
         if self.db_client:
-            new_user = User(username, full_user_name, real_user_id, followers_array, followings_array, user_bio)
             infos = new_user.save_user(self.db_client.database)
             self.logger.print(infos, color="blue", method="GET USER DATA")
 
+        return new_user
         # treat data - common friends
         mutual_friendship = followings.keys() & followers.keys()
         mutual_friends = {}
@@ -330,43 +331,155 @@ class InstaManager:
 
         return mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me
 
-    def get_friendship_status_1(self, username_1, username_2):
-        print("later")
-
-    def get_friendship_status(self):
-        try:
-            mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me = self.get_follow_data(
-                self.username)
-        except GraphQLError.GraphQLError as bad_except:
-            print(bad_except)
-            if "limited" in bad_except.json.get("message"):
+    def get_real_friends(self, username, optimized=False):
+        # get data of user
+        if optimized:
+            self.logger.print("Optimized version detected", color="blue", method="GET REAL FRIENDS")
+            short_user = User(username)
+            user = short_user.find_user_by_username(self.db_client.database)
+            if not user:
+                self.logger.print("Cannot find " + username + " in db", color="yellow", method="GET REAL FRIENDS")
+                try:
+                    user = self.get_user_data(username)
+                except GraphQLError.GraphQLError as bad_except:
+                    raise bad_except
+            else:
+                self.logger.print("Find " + username + " in db. Data from " + str(user.last_modified), color="blue",
+                                  method="GET REAL FRIENDS")
+        else:
+            try:
+                user = self.get_user_data(username)
+            except GraphQLError.GraphQLError as bad_except:
                 raise bad_except
 
+        # calc real friends
+        dict_user_followers = {follower["insta_id"]: follower["username"] for follower in user.followers}
+        dict_user_followings = {following["insta_id"]: following["insta_id"] for following in user.followings}
+        real_friends_user_keys = dict_user_followers.keys() & dict_user_followings.keys()
+        real_friends_user = {}
+        for inter in real_friends_user_keys:
+            real_friends_user[inter] = dict_user_followers[inter]
+        return real_friends_user
+
+    def get_friendship_status(self, username_1, username_2, optimized=False):
+        # get user 1 friends
+        try:
+            real_friends_user_1 = self.get_real_friends(username_1, optimized)
+        except GraphQLError.GraphQLError as bad_except:
+            if "patienter" in bad_except.json.get("message"):
+                self.logger.print("Limits of request reached, sleep 120", color="yellow",
+                                  method="GET FRIENDSHIP STATUS")
+                time.sleep(120)
+                try:
+                    real_friends_user_1 = self.get_real_friends(username_1, optimized)
+                except GraphQLError.GraphQLError:
+                    self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                      method="GET FRIENDSHIP STATUS")
+                    return
+            elif "limited" in bad_except.json.get("message"):
+                self.logger.print("Too many request done, sleep 240", color="red", method="GET FRIENDSHIP STATUS")
+                time.sleep(240)
+                try:
+                    real_friends_user_1 = self.get_real_friends(username_1, optimized)
+                except GraphQLError.GraphQLError:
+                    self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                      method="GET FRIENDSHIP STATUS")
+                    return
+
+        # get user 2 friends
+        try:
+            real_friends_user_2 = self.get_real_friends(username_2, optimized)
+        except GraphQLError.GraphQLError as bad_except:
+            if "patienter" in bad_except.json.get("message"):
+                self.logger.print("Limits of request reached, sleep 120", color="yellow",
+                                  method="GET FRIENDSHIP STATUS")
+                time.sleep(120)
+                try:
+                    real_friends_user_2 = self.get_real_friends(username_2, optimized)
+                except GraphQLError.GraphQLError:
+                    self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                      method="GET FRIENDSHIP STATUS")
+                    return
+            elif "limited" in bad_except.json.get("message"):
+                self.logger.print("Too many request done, sleep 240", color="red", method="GET FRIENDSHIP STATUS")
+                time.sleep(240)
+                try:
+                    real_friends_user_2 = self.get_real_friends(username_2, optimized)
+                except GraphQLError.GraphQLError:
+                    self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                      method="GET FRIENDSHIP STATUS")
+                    return
+
+        real_common_friends = real_friends_user_2.keys() & real_friends_user_1.keys()
+        string1 = username_2 + " and " + username_1 + " have " + str(len(real_common_friends)) + " friends in common"
+        string2 = str((len(real_common_friends) / len(
+            real_friends_user_1)) * 100) + "% of " + username_1 + "'s friends are friends with " + username_2
+        string3 = str((len(real_common_friends) / len(
+            real_friends_user_2)) * 100) + "% of " + username_2 + "'s friends are friends with " + username_1
+        self.logger.print(string1, color="green", method="GET FRIENDSHIP STATUS")
+        self.logger.print(string2, color="green", method="GET FRIENDSHIP STATUS")
+        self.logger.print(string3, color="green", method="GET FRIENDSHIP STATUS")
+
+        return real_common_friends
+
+    def get_all_friendship_status(self):
+
+        try:
+            real_friends = self.get_real_friends(self.username, optimized=True)
+        except GraphQLError.GraphQLError as bad_except:
+            if "patienter" in bad_except.json.get("message"):
+                self.logger.print("Limits of request reached, sleep 120", color="yellow",
+                                  method="GET FRIENDSHIP STATUS")
+                time.sleep(120)
+                try:
+                    real_friends = self.get_real_friends(self.username, optimized=True)
+                except GraphQLError.GraphQLError:
+                    self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                      method="GET FRIENDSHIP STATUS")
+                    return
+            elif "limited" in bad_except.json.get("message"):
+                self.logger.print("Too many request done, sleep 240", color="red", method="GET FRIENDSHIP STATUS")
+                time.sleep(240)
+                try:
+                    real_friends = self.get_real_friends(self.username, optimized=True)
+                except GraphQLError.GraphQLError:
+                    self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                      method="GET FRIENDSHIP STATUS")
+                    return
+
         result = {}
+        print(real_friends)
 
-        print(mutual_friends)
-
-        for friends in mutual_friends:
+        for friends in real_friends:
             try:
-                mutual_friends_of_friends, not_used1, not_used2 = self.get_follow_data(
-                    mutual_friends.get(friends).get("user_name"))
+                mutual_friends_of_friends = self.get_real_friends(real_friends.get(friends), optimized=True)
             except GraphQLError.GraphQLError as bad_except:
                 if "patienter" in bad_except.json.get("message"):
-                    self.logger.print("Limits of request reached, sleep 60", color="yellow",
+                    self.logger.print("Limits of request reached, sleep 120", color="yellow",
                                       method="GET FRIENDSHIP STATUS")
-                    time.sleep(60)
-                    mutual_friends_of_friends, not_used1, not_used2 = self.get_follow_data(
-                        mutual_friends.get(friends).get("user_name"))
-                elif "limited" in bad_except.json.get("message"):
-                    self.logger.print("Too many request done, sleep 120", color="red", method="GET FRIENDSHIP STATUS")
                     time.sleep(120)
-                    mutual_friends_of_friends, not_used1, not_used2 = self.get_follow_data(
-                        mutual_friends.get(friends).get("user_name"))
-            mutual_friendship = mutual_friends.keys() & mutual_friends_of_friends.keys()
-            result[mutual_friends.get(friends).get("user_name")] = {
+                    try:
+                        mutual_friends_of_friends = self.get_real_friends(real_friends.get(friends), optimized=True)
+                    except GraphQLError.GraphQLError:
+                        self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                          method="GET FRIENDSHIP STATUS")
+                        return
+                elif "limited" in bad_except.json.get("message"):
+                    self.logger.print("Too many request done, sleep 240", color="red", method="GET FRIENDSHIP STATUS")
+                    time.sleep(240)
+                    try:
+                        mutual_friends_of_friends = self.get_real_friends(real_friends.get(friends), optimized=True)
+                    except GraphQLError.GraphQLError:
+                        self.logger.print("Limits of request reached, impossible to go further", color="red",
+                                          method="GET FRIENDSHIP STATUS")
+                        return
+
+            mutual_friendship = real_friends.keys() & mutual_friends_of_friends.keys()
+            result[real_friends.get(friends)] = {
                 "same_real_friends_number": len(mutual_friendship),
                 "percentage_real_friends_common": (len(mutual_friendship) / len(mutual_friends_of_friends)) * 100}
             print(result)
+            time.sleep(5)
 
         sorted_friends_by_percentage = sorted(result.items(), key=lambda x: x[1].get("percentage_real_friends_common"))
         for i in range(len(sorted_friends_by_percentage)):
