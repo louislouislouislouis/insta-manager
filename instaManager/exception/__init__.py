@@ -1,2 +1,2 @@
 __all__ = ["XPathNotFoundError", "UrlNotFoundError", "NotConnectedError", "CommentsNotFoundError",
-           "HashTagsNotFoundError", "GraphQLError"]
+           "HashTagsNotFoundError", "GraphQLError", "NoDatabaseError"]

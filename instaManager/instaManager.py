@@ -11,19 +11,27 @@ import urllib
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 
-# numpy
-import numpy as np
-
-# personal import
+# custom exception
 from instaManager.exception import *
+
+# custom interaction
 from instaManager.interaction.interaction import click
 from instaManager.interaction.interaction import get
 from instaManager.interaction.interaction import send_keys
+
+# custom log
 from instaManager.logger.log import Log
+
+# custom db manager
+from instaManager.mongoManager.mongoManager import MongoManager
+
+# custom python model
+from instaManager.model.user import User
 
 # const
 XPATH_FILENAME = os.path.join(os.path.dirname(__file__), 'config/xpath.json')
 URL_FILENAME = os.path.join(os.path.dirname(__file__), 'config/url.json')
+DB_CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'config/credentials_db.json')
 COMMENTS_FILENAME = os.path.join(os.path.dirname(__file__), 'data/comments.json')
 HASHTAGS_FILENAME = os.path.join(os.path.dirname(__file__), 'data/hashtags.json')
 
@@ -36,8 +44,31 @@ class InstaManager:
         self.is_connected = False
         self.logger = Log("INSTAMANAGER")
         self.headless = headless
+        self.db_client = None
 
-        # Json option
+        # database manager
+        try:
+            f = open(DB_CREDENTIALS_FILENAME)
+            cred = json.load(f)
+            self.db_client = MongoManager(cred["name"], cred["login"], cred["pw"])
+            self.logger.print("Database found", color="blue", method="CONSTRUCTOR")
+        except NoDatabaseError.NoDatabaseError as bad_except:
+            self.db_client = None
+            self.logger.print("Error while initialized database: " + bad_except.json["codeName"], color="yellow",
+                              method="CONSTRUCTOR")
+        except KeyError as bad_except:
+            self.db_client = None
+            self.logger.print("Error while initialized database: cannot find key: `" + str(
+                bad_except) + "` in " + DB_CREDENTIALS_FILENAME,
+                              color="yellow",
+                              method="CONSTRUCTOR")
+        except FileNotFoundError:
+            self.db_client = None
+            self.logger.print("Error while initialized database: cannot find file: `" + DB_CREDENTIALS_FILENAME,
+                              color="yellow",
+                              method="CONSTRUCTOR")
+
+        # get json data
         try:
             f = open(XPATH_FILENAME)
             self.xpath = json.load(f)
@@ -194,7 +225,7 @@ class InstaManager:
                               method="FIND AND INTERACT BY TAGS")
             return stats
 
-    def get_follow_data(self, username):
+    def get_user_data(self, username):
         # get profile url
         url = re.sub("\{.*?\}", username, self.urls.get("profile_page"))
         # json format
@@ -204,13 +235,18 @@ class InstaManager:
         # get good data
         content = self.driver.find_element_by_tag_name('pre').text
         parsed_json = json.loads(content)
+        # get beginning of user data
         real_user_id = parsed_json.get("graphql").get("user").get("id")
+        full_user_name = parsed_json.get("graphql").get("user").get("full_name")
+        user_bio = parsed_json.get("graphql").get("user").get("biography")
 
         # loop for followers
         has_next = True
         after = None
         followers = {}
         followings = {}
+        followers_array = []
+        followings_array = []
         while has_next:
             params = {"id": real_user_id,
                       "include_reel": True,
@@ -224,9 +260,6 @@ class InstaManager:
                 "{VAR_VAL}", params)
             get(self.driver, url)
             # get data
-            elem = self.driver.find_element_by_xpath("//*")
-            source_code = elem.get_attribute("outerHTML")
-            print(source_code)
             content = self.driver.find_element_by_tag_name('pre').text
             parsed_json = json.loads(content)
             if parsed_json.get("status") != "ok":
@@ -237,7 +270,8 @@ class InstaManager:
             for follower_raw in followers_raw:
                 user_name = follower_raw.get("node").get("username")
                 full_name = follower_raw.get("node").get("full_name")
-                followers[follower_raw.get("node").get("id")] = {"user_name": user_name, "full_name": full_name}
+                followers_array.append({"insta_id": follower_raw.get("node").get("id"), "user_name": user_name})
+                followers[follower_raw.get("node").get("id")] = {"username": user_name, "full_name": full_name}
 
         # loop for followings
         has_next = True
@@ -265,10 +299,18 @@ class InstaManager:
             after = parsed_json.get("data").get("user").get("edge_follow").get("page_info").get(
                 "end_cursor")
             followings_raw = parsed_json.get("data").get("user").get("edge_follow").get("edges")
+
             for following_raw in followings_raw:
                 user_name = following_raw.get("node").get("username")
                 full_name = following_raw.get("node").get("full_name")
-                followings[following_raw.get("node").get("id")] = {"user_name": user_name, "full_name": full_name}
+                followings_array.append({"insta_id": following_raw.get("node").get("id"), "user_name": user_name})
+                followings[following_raw.get("node").get("id")] = {"username": user_name, "full_name": full_name}
+
+        # database
+        if self.db_client:
+            new_user = User(username, full_user_name, real_user_id, followers_array, followings_array, user_bio)
+            infos = new_user.save_user(self.db_client.database)
+            self.logger.print(infos, color="blue", method="GET USER DATA")
 
         # treat data - common friends
         mutual_friendship = followings.keys() & followers.keys()
@@ -287,6 +329,9 @@ class InstaManager:
                 fake_friends_not_following_me[i] = followings[i]
 
         return mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me
+
+    def get_friendship_status_1(self, username_1, username_2):
+        print("later")
 
     def get_friendship_status(self):
         try:
