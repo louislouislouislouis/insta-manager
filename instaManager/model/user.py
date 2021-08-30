@@ -85,4 +85,4 @@ class User:
         # if we need to add
         collection = database[self.collection_name]
         collection.insert_one(self.get_mongo_obj())
-        return "The information about" + self.username + " has been added to database"
+        return "The information about " + self.username + " has been added to database"

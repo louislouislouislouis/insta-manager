@@ -5,7 +5,7 @@ from instaManager.instaManager import InstaManager
 
 # const
 PATH_TO_DRIVER = os.path.join(os.path.dirname(__file__), 'chromedriver')
-CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'credentials23.json')
+CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'credentials_louislmbrd.json')
 
 # get cred info
 try:
@@ -20,7 +20,7 @@ except Exception as bad_except:
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     my_insta_manager = InstaManager(PATH_TO_DRIVER, insta_username, insta_password, headless=False)
-    my_insta_manager.connect()
+    # my_insta_manager.connect()
     # my_insta_manager.get_friendship_status("elisepegaz", "rapha.vgn", optimized=True)
     my_insta_manager.get_all_friendship_status()
 
