@@ -278,6 +278,7 @@ class InstaManager:
                 full_name = follower_raw.get("node").get("full_name")
                 followers_array.append({"insta_id": follower_raw.get("node").get("id"), "username": user_name})
                 followers[follower_raw.get("node").get("id")] = {"username": user_name, "full_name": full_name}
+            time.sleep(1)
 
         # loop for followings
         has_next = True
@@ -311,6 +312,8 @@ class InstaManager:
                 full_name = following_raw.get("node").get("full_name")
                 followings_array.append({"insta_id": following_raw.get("node").get("id"), "username": user_name})
                 followings[following_raw.get("node").get("id")] = {"username": user_name, "full_name": full_name}
+            time.sleep(1)
+
         # create user
         new_user = User(username, full_user_name, real_user_id, followers_array, followings_array, user_bio)
         # database
@@ -432,14 +435,15 @@ class InstaManager:
         return real_common_friends
 
     def get_all_friendship_status(self):
-
+        if not self.is_connected:
+            raise NotConnectedError.NotConnectedError()
         try:
             real_friends, optimized_result = self.get_real_friends(self.username, optimized=True)
         except GraphQLError.GraphQLError as bad_except:
             if "patienter" in bad_except.json.get("message"):
                 self.logger.print("Limits of request reached, sleep 120", color="yellow",
                                   method="GET FRIENDSHIP STATUS")
-                time.sleep(120)
+                time.sleep(300)
                 try:
                     real_friends, optimized_result = self.get_real_friends(self.username, optimized=True)
                 except GraphQLError.GraphQLError:
@@ -448,6 +452,7 @@ class InstaManager:
                     return
             elif "limited" in bad_except.json.get("message"):
                 self.logger.print("Too many request done, sleep 240", color="red", method="GET FRIENDSHIP STATUS")
+                return
                 time.sleep(240)
                 try:
                     real_friends, optimized_result = self.get_real_friends(self.username, optimized=True)
@@ -468,7 +473,7 @@ class InstaManager:
                 if "patienter" in bad_except.json.get("message"):
                     self.logger.print("Limits of request reached, sleep 120", color="yellow",
                                       method="GET FRIENDSHIP STATUS")
-                    time.sleep(120)
+                    time.sleep(300)
                     try:
                         mutual_friends_of_friends, optimized_result = self.get_real_friends(real_friends.get(friends),
                                                                                             optimized=True)
@@ -479,7 +484,8 @@ class InstaManager:
                         return
                 elif "limited" in bad_except.json.get("message"):
                     self.logger.print("Too many request done, sleep 240", color="red", method="GET FRIENDSHIP STATUS")
-                    time.sleep(240)
+                    return
+                    ime.sleep(240)
                     try:
                         mutual_friends_of_friends, optimized_result = self.get_real_friends(real_friends.get(friends),
                                                                                             optimized=True)
@@ -502,7 +508,7 @@ class InstaManager:
                     "same_real_friends_number": len(mutual_friendship),
                     "percentage_real_friends_common": 0}
             if not optimized_result:
-                time.sleep(30)
+                time.sleep(45)
 
         sorted_friends_by_percentage = sorted(result.items(), key=lambda x: x[1].get("percentage_real_friends_common"),
                                               reverse=True)
@@ -523,8 +529,8 @@ class InstaManager:
         leveler_percent = max_point / max_friends_percent
         leveler_raw = max_point / max_friends_common
 
-        c1 = '#00ffe5'  # blue
-        c2 = '#007fff'  # green
+        c1 = '#00ffe5'
+        c2 = '#007fff'
 
         for i in range(len(sorted_friends_by_number)):
             net.add_node(n_id=sorted_friends_by_number[i][1]['id'], label=str(sorted_friends_by_number[i][0]),
@@ -541,8 +547,37 @@ class InstaManager:
                     pass
         net.show_buttons(filter_=['physics'])
         net.show("./generatedFiles/graph.html")
-        
+
         return result
+
+    def all_data_graph(self):
+        user = User("Fake")
+        users = user.find_all(self.db_client.database)
+        net = Network()
+        result = {}
+        max_friends = 0
+        max_point = 15
+        c1 = '#00ffe5'
+        c2 = '#007fff'
+        for user in users:
+            friends, opt_result = self.get_real_friends(user["username"], optimized=True)
+            result[user["insta_id"]] = friends
+            max_friends = max(max_friends, len(friends.keys()))
+        users.rewind()
+        for user2 in users:
+            net.add_node(n_id=user2["insta_id"],
+                         label=user2["username"],
+                         size=max_point * len(result[user2["insta_id"]].keys()) / max_friends,
+                         color=colorFader(c2, c1, len(result[user2["insta_id"]].keys()) / max_friends))
+        users.rewind()
+        for user3 in users:
+            for friends in result[user3["insta_id"]]:
+                try:
+                    net.add_edge(user3["insta_id"], friends)
+                except Exception:
+                    pass
+        net.show_buttons(filter_=['physics'])
+        net.show("./generatedFiles/all_graph.html")
 
 
 def colorFader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)

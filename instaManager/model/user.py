@@ -45,6 +45,11 @@ class User:
             "last_modified": datetime.datetime.utcnow()
         }
 
+    def find_all(self, database):
+        collection = database[self.collection_name]
+        users = collection.find({})
+        return users
+
     def find_user_by_insta_id(self, database):
         collection = database[self.collection_name]
         user = collection.find_one({"insta_id": self.insta_id})
