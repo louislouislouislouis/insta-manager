@@ -3,4 +3,4 @@
 - Follow person
 - Send private message
 - Validate with phone and APi
-- Mongodb validation?
+

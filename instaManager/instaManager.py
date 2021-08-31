@@ -105,6 +105,11 @@ class InstaManager:
         self.logger.print("Class InstaManager initialized", color="blue", method="CONSTRUCTOR")
 
     def connect(self, max_time=6):
+        """
+        Basic function for connecting into instagram account
+        :param max_time: int, maximum time in seconds waiting before error
+        :return: None
+        """
         try:
             self.logger.print("Trying to connect...", color="blue", method="CONNECT")
             # get into connect page
@@ -130,6 +135,17 @@ class InstaManager:
 
     def find_and_comment_post_by_tag(self, tags, percentage_like=0.5, percentage_comment=0.5, sleep_time=20,
                                      limits_like=20, limits_comments=20):
+        """
+        Evolved function. Find hashtags most recent post, see post and comment and like some of them
+
+        :param tags: string, instagram Hashtags value
+        :param percentage_like: float between 0 and 1, percentage of seen post liked, default 0.5
+        :param percentage_comment: float between 0 and 1, percentage of seen post commented, default 0.5
+        :param sleep_time: int, time in seconds between each visitation of post
+        :param limits_like: int, maximum like in a session
+        :param limits_comments: int, maximum comment in a session
+        :return: dict {}: stats of session
+        """
         self.logger.print("Start comment and like by tag session", color="blue", method="FIND AND INTERACT BY TAGS")
         if not self.is_connected:
             raise NotConnectedError.NotConnectedError()
@@ -232,6 +248,12 @@ class InstaManager:
             return stats
 
     def get_user_data(self, username):
+        """
+        Basic function to get data of username. Store info in db.
+
+        :param username: string, username to reach
+        :return: mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me
+        """
         # get profile url
         url = re.sub("\{.*?\}", username, self.urls.get("profile_page"))
         # json format
@@ -341,6 +363,13 @@ class InstaManager:
         return mutual_friends, fake_friends_not_follow_by_me, fake_friends_not_following_me
 
     def get_real_friends(self, username, optimized=False):
+        """
+        Evolve Function. Get real friends of username.
+
+        :param username: String. Username to find friends
+        :param optimized: Boolean. Default: False. Allow interaction with db in order to avoid requesting instagram
+        :return: real_friends_user, optimized_result
+        """
         # get data of user
         if optimized and self.db_client:
             self.logger.print("Optimized version detected", color="blue", method="GET REAL FRIENDS")
@@ -374,6 +403,14 @@ class InstaManager:
         return real_friends_user, optimized_result
 
     def get_friendship_status(self, username_1, username_2, optimized=False):
+        """
+        Evolve function. Get a report of relationship between 2 users.
+
+        :param username_1: String
+        :param username_2: String
+        :param optimized: Boolean. Default: False. Allow to use db value in order to avoid requests in instagram
+        :return: real_common_friends
+        """
         # get user 1 friends
         try:
             real_friends_user_1, optimized_result = self.get_real_friends(username_1, optimized)
@@ -435,6 +472,11 @@ class InstaManager:
         return real_common_friends
 
     def get_all_friendship_status(self):
+        """
+        If connected, get a report about all real friends relationship
+
+        :return: result, dict
+        """
         if not self.is_connected:
             raise NotConnectedError.NotConnectedError()
         try:
@@ -536,7 +578,7 @@ class InstaManager:
             net.add_node(n_id=sorted_friends_by_number[i][1]['id'], label=str(sorted_friends_by_number[i][0]),
                          size=(sorted_friends_by_number[i][1][
                                    'same_real_friends_number'] * leveler_raw + 1),
-                         color=colorFader(c2, c1, sorted_friends_by_number[i][1][
+                         color=color_fader(c2, c1, sorted_friends_by_number[i][1][
                              'same_real_friends_number'] / max_friends_common))
 
         for i in range(len(sorted_friends_by_number)):
@@ -551,6 +593,10 @@ class InstaManager:
         return result
 
     def all_data_graph(self):
+        """
+        Create  a graph with all data in database
+        :return: None
+        """
         user = User("Fake")
         users = user.find_all(self.db_client.database)
         net = Network()
@@ -568,7 +614,7 @@ class InstaManager:
             net.add_node(n_id=user2["insta_id"],
                          label=user2["username"],
                          size=max_point * len(result[user2["insta_id"]].keys()) / max_friends,
-                         color=colorFader(c2, c1, len(result[user2["insta_id"]].keys()) / max_friends))
+                         color=color_fader(c2, c1, len(result[user2["insta_id"]].keys()) / max_friends))
         users.rewind()
         for user3 in users:
             for friends in result[user3["insta_id"]]:
@@ -580,7 +626,15 @@ class InstaManager:
         net.show("./generatedFiles/all_graph.html")
 
 
-def colorFader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+def color_fader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+    """
+    fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+
+    :param c1: color 1
+    :param c2: color 2
+    :param mix: float between 0 and 1. Percentage of mixture
+    :return: color code
+    """
     c1 = np.array(mpl.colors.to_rgb(c1))
     c2 = np.array(mpl.colors.to_rgb(c2))
     return mpl.colors.to_hex((1 - mix) * c1 + mix * c2)
